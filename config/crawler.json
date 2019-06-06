@@ -1,0 +1,9 @@
+{
+    "DBname": "searchEngine",
+    "QueDBname": "searchEngine_Que",
+    "MongoAuthentication": false,
+    "MongoAuthCredentials": {
+        "username": "admin",
+        "password": "Ffeirluke234"
+    }
+}
