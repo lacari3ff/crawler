@@ -19,7 +19,7 @@ if(config.MongoAuthentication) {
     var username = encodeURIComponent(config.MongoAuthCredentials.username);
     var password = encodeURIComponent(config.MongoAuthCredentials.password);
     var AuthMech = 'DEFAULT';
-    var DataBase = f('mongodb://%s:%s@192.168.178.15:27017/admin?authMechanism=%s?authSource=admin&w=1', user, password, AuthMech);
+    var DataBase = f('mongodb://%s:%s@%s:27017/admin?authMechanism=%s?authSource=admin&w=1', username, password, config.MongoAuthenticationIp, AuthMech);
 } else {
     var DataBase = 'mongodb://127.0.0.1:27017/?gssapiServiceName=mongodb';
 }
@@ -35,28 +35,75 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             The functions
         */
         // The site crawl function
-        function crawlPage(url, cb) {
-            if(url) {
-                correctUrl(url, function(res) {
-                    if(res) {
-                        getPageData(res, function(siteObject, urls) {
-                            if(siteObject) {
-                                cb(siteObject, urls);
-                            } else {
-                                console.log('An error occured');
-                                cb(false);
-                            }
-                        })
-                    } else {
-                        cb(false);
-                    }
-                })
-            } else {
-                cb(false);
-            }
+        function crawlPage(url) {
+            return new Promise(function(cb) {
+                var errorTimer = setTimeout(function() {
+                    cb(false);
+                }, 900)
+                if(url) {
+                    correctUrl(url, function(res) {
+                        if(res) {
+                            getPageData(res, function(siteObject, urls) {
+                                if(siteObject) {
+                                    clearTimeout(errorTimer);
+                                    cb({
+                                        siteObject: siteObject,
+                                        urls: urls
+                                    })
+                                } else {
+                                    clearTimeout(errorTimer);
+                                    console.log('An error occured');
+                                    cb(false);
+                                }
+                            })
+                        } else {
+                            clearTimeout(errorTimer);
+                            cb(false);
+                        }
+                    })
+                } else {
+                    clearTimeout(errorTimer);
+                    cb(false);
+                }
+            })
+        }
+        function crawlSubPage(url) {
+            return new Promise(function(cb) {
+                var errorTimer = setTimeout(function() {
+                    cb(false);
+                }, 900)
+                if(url) {
+                    correctUrl(url, function(res) {
+                        if(res) {
+                            getSubPageData(res, function(siteObject) {
+                                if(siteObject) {
+                                    clearTimeout(errorTimer);
+                                    cb({
+                                        siteObject: siteObject
+                                    })
+                                } else {
+                                    clearTimeout(errorTimer);
+                                    console.log('An error occured');
+                                    cb(false);
+                                }
+                            })
+                        } else {
+                            clearTimeout(errorTimer);
+                            cb(false);
+                        }
+                    })
+                } else {
+                    clearTimeout(errorTimer);
+                    cb(false);
+                }
+            })
         }
         // Grabs the data from the site
         function getPageData(url, cb) {
+            var errorTimer = setTimeout(function() {
+                cb(false);
+            }, 1000)
+
             reqp(url).then(function(html) {
                 var $ = cheerio.load(html);
                 // Defines the site object
@@ -94,7 +141,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 
                     var viewPortTag_ObjectArray = [];
                     var viewPortTag_ObjectArray2 = [];
-                    
+
                     viewPortTag_array.forEach(function(viten) {
                         viewPortTag_ObjectArray.push(viten.split('=').join(':'));
                     })
@@ -117,9 +164,80 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 // Gets the sub urls
                 var urlsToParse = $('a');
                 fetchUrls(urlsToParse, url, function(result) {
+                    console.log('as')
                     // Sets the callback
+                    clearTimeout(errorTimer);
                     cb(siteObject, result);
                 })
+            }).catch(function(err) {
+                cb(false);
+            })
+        }
+        // Grabs the data from the site
+        function getSubPageData(url, cb) {
+            var errorTimer = setTimeout(function() {
+                cb(false);
+            }, 1000)
+
+            reqp(url).then(function(html) {
+                var $ = cheerio.load(html);
+                // Defines the site object
+                var siteObject = {};
+                // Gets the domain
+                var urld = urlParser.parse(url, true);
+                // Sets site data
+                var title = $('title').text();
+                siteObject.ste_title = title;
+                siteObject.ste_desc = $('meta[name="description"]').attr('content');
+                siteObject.ste_author = $('meta[name="author"]').attr('content');
+                siteObject.ste_copyright = $('meta[name="copyright"]').attr('content');
+                siteObject.ste_url = url;
+                siteObject.ste_host = urld.host;
+                siteObject.ste_srank = 1;
+                if(urld.pathname != '/') {
+                    siteObject.ste_master = 0;
+                    siteObject.ste_path_raw = urld.pathname;
+                    siteObject.ste_path_view = urld.host + urld.pathname.split('/').join(' > ');
+                } else {
+                    siteObject.ste_master = 1;
+                    siteObject.ste_path_raw = undefined;
+                    siteObject.ste_path_view = undefined;
+                }
+                var keywords = $('meta[name="keywords"]').attr('content');
+                if(keywords) {
+                    siteObject.ste_keywords = keywords.split(',');
+                } else {
+                    siteObject.ste_keywords = undefined;
+                }
+                // Processes the viewport
+                var viewPortTag = $('meta[name="viewport"]').attr('content');
+                if(viewPortTag != null) {
+                    var viewPortTag_array = viewPortTag.split(',');
+                
+                    var viewPortTag_ObjectArray = [];
+                    var viewPortTag_ObjectArray2 = [];
+
+                    viewPortTag_array.forEach(function(viten) {
+                        viewPortTag_ObjectArray.push(viten.split('=').join(':'));
+                    })
+                
+                    viewPortTag_ObjectArray.forEach(function(a) {
+                        var b = a.split(':');
+                    
+                        viewPortTag_ObjectArray2.push('"' + b[0].split('-').join('_') + '":"' + b[1] + '"')
+                    })
+                
+                    viewPortTag_ObjectArray2 = '{' + viewPortTag_ObjectArray2 + '}';
+                    viewPortTag_ObjectArray2 = viewPortTag_ObjectArray2.split(' ').join('');
+                    viewport = JSON.parse(viewPortTag_ObjectArray2);
+                
+                    siteObject.site_viewport = viewport;
+                } else {
+                    siteObject.site_viewport = undefined;
+                }
+                
+                // Gets the sub urls
+                cb(siteObject);
             }).catch(function(err) {
                 cb(false);
             })
@@ -154,18 +272,18 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 // Says one more is processed
                 processed++;
                 // Checks if process is done
-                if(processed === urlsToParse.length) {
+                if(processed >= urlsToParse.length) {
                     cb(urls);
                 }
             }
         }
         // The adjust url function to make url correct
         /* 
-        
+
             The URL Format (Without dir): (https://)(http://)example.com
-        
+
             The URL Format (With dir): (https://)(http://)example.com/test
-        
+
         */
         function correctUrl(url, cb) {
             // Gets the url
@@ -207,20 +325,79 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             Insert into database
         */
         function insertPage(siteObject, cb) {
-        
+            if(siteObject) {
+                mainDBO.collection('indexed').findOne({
+                    ste_url: siteObject.ste_url
+                }, function(err, res) {
+                    if(err) {
+                        cb(false);
+                    } else if(res) {
+                        mainDBO.collection('indexed').updateOne({
+                            ste_url: siteObject.ste_url
+                        }, {
+                            $set: {
+                                ste_title: siteObject.ste_title,
+                                ste_desc: siteObject.ste_desc,
+                                ste_author: siteObject.ste_author,
+                                ste_copyright: siteObject.ste_copyright,
+                                ste_keywords: siteObject.ste_keywords,
+                                site_viewport: siteObject.site_viewport
+                            }
+                        }, function(err) {
+                            if(err) {
+                                cb(false);
+                            } else {
+                                cb(true);
+                            }
+                        })
+                    } else {
+                        mainDBO.collection('indexed').insertOne(siteObject, function(err) {
+                            if(err) {
+                                cb(false);
+                            } else {
+                                cb(true);
+                            }
+                        })
+                    }
+                })
+            } else {
+                cb(false);
+            }
         }
         /* 
             Crawl full site
         */
         function crawlSite(url, cb) {
-            // Configures the arrays
-            var toCrawlArray = [];
-            var crawledArray = [];
             // Indexes the main page
-            crawlPage(url, function(res, urls) {
-                if(res) {
-                    crawledArray.push(url);
-                
+            crawlPage(url).then(function(result) {
+                if(result) {
+                    var urls = result.urls;
+                    var processed = 0;
+
+                    var errorTimer = setTimeout(function() {
+                        cb(false);
+                    }, 3000)
+                    urls.forEach(function(url) {
+                        crawlSubPage(url).then(function(res) {
+                            if(res) {
+                                insertPage(res.siteObject, function(result) {
+                                    if(result) {
+                                        console.log(`Inserted: ${url}`);
+                                    }
+                                })
+                            } else {
+                                console.log(`Error: ${url}`);
+                            }
+
+                            processed++;
+                            if(processed >= urls.length) {
+                                clearTimeout(errorTimer);
+                                cb(true);
+                            }
+                        }).catch(function(err) {
+                            cb(false);
+                        })
+                    })
                 } else {
                     cb(false);
                 }
@@ -229,9 +406,36 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         /*
             The script
         */
-        crawlPage('https://discord.com/jobs', function(res, urls) {
-            console.log(res);
-            console.log(urls);
-        })
+        function crawlQue() {
+            queDBO.collection('que').findOne(function(err, site) {
+                if(err) {
+                    console.log(err);
+                } else {
+                    if(site) {
+                        queDBO.collection('que').deleteOne(function(err) {
+                            if(err) {
+                                console.log(err);
+                            } else {
+                                crawlSite(site.url, function(cb) {
+                                    if(cb) {
+                                        console.log('done');
+                                        crawlQue()
+                                    } else {
+                                        crawlQue()
+                                    }
+                                })
+                            }
+                        })
+                    } else {
+                        console.log('Waiting for job');
+                        setTimeout(function() {
+                            crawlQue()
+                        }, 500)
+                    }
+                }
+            })
+        }
+
+        crawlQue();
     }
 })
