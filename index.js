@@ -38,8 +38,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         function crawlPage(url) {
             return new Promise(function(cb) {
                 var errorTimer = setTimeout(function() {
+                    console.log('Crawlpage error timer off')
                     cb(false);
-                }, 900)
+                }, 50000)
                 if(url) {
                     correctUrl(url, function(res) {
                         if(res) {
@@ -70,8 +71,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         function crawlSubPage(url) {
             return new Promise(function(cb) {
                 var errorTimer = setTimeout(function() {
+                    console.log('CrawlSubpage error timer off')
                     cb(false);
-                }, 900)
+                }, 7000)
                 if(url) {
                     correctUrl(url, function(res) {
                         if(res) {
@@ -101,10 +103,13 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         // Grabs the data from the site
         function getPageData(url, cb) {
             var errorTimer = setTimeout(function() {
+                console.log('GetPageData error timer off')
                 cb(false);
-            }, 1000)
+            }, 18000)
 
-            reqp(url).then(function(html) {
+            reqp(url, {
+                timeout: 18000
+            }).then(function(html) {
                 var $ = cheerio.load(html);
                 // Defines the site object
                 var siteObject = {};
@@ -112,6 +117,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 var urld = urlParser.parse(url, true);
                 // Sets site data
                 var title = $('title').text();
+                var icon = $('link[rel="icon"]').attr('href');
                 siteObject.ste_title = title;
                 siteObject.ste_desc = $('meta[name="description"]').attr('content');
                 siteObject.ste_author = $('meta[name="author"]').attr('content');
@@ -127,6 +133,15 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                     siteObject.ste_master = 1;
                     siteObject.ste_path_raw = undefined;
                     siteObject.ste_path_view = undefined;
+                }
+                if(icon && url.substring(0, 8) === 'https://') {
+                    if(icon.substring(0, 8) === 'https://') {
+                        siteObject.ste_icon = icon;
+                    } else {
+                        siteObject.ste_icon = 'https://' + urld.host + icon;
+                    }
+                } else {
+                    siteObject.ste_icon = '/images/fannst/main/search/site-icon.png';
                 }
                 var keywords = $('meta[name="keywords"]').attr('content');
                 if(keywords) {
@@ -163,6 +178,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             
                 // Gets the sub urls
                 var urlsToParse = $('a');
+                console.log('as')
                 fetchUrls(urlsToParse, url, function(result) {
                     console.log('as')
                     // Sets the callback
@@ -170,16 +186,20 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                     cb(siteObject, result);
                 })
             }).catch(function(err) {
+                clearTimeout(errorTimer);
                 cb(false);
             })
         }
         // Grabs the data from the site
         function getSubPageData(url, cb) {
             var errorTimer = setTimeout(function() {
+                console.log('getSubPageData error timer off:' + url)
                 cb(false);
-            }, 1000)
+            }, 18000)
 
-            reqp(url).then(function(html) {
+            reqp(url, {
+                timeout: 8000
+            }).then(function(html) {
                 var $ = cheerio.load(html);
                 // Defines the site object
                 var siteObject = {};
@@ -194,6 +214,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 siteObject.ste_url = url;
                 siteObject.ste_host = urld.host;
                 siteObject.ste_srank = 1;
+                var icon = $('link[rel="icon"]').attr('href');
                 if(urld.pathname != '/') {
                     siteObject.ste_master = 0;
                     siteObject.ste_path_raw = urld.pathname;
@@ -202,6 +223,15 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                     siteObject.ste_master = 1;
                     siteObject.ste_path_raw = undefined;
                     siteObject.ste_path_view = undefined;
+                }
+                if(icon && url.substring(0, 8) === 'https://') {
+                    if(icon.substring(0, 8) === 'https://') {
+                        siteObject.ste_icon = icon;
+                    } else {
+                        siteObject.ste_icon = 'https://' + urld.host + icon;
+                    }
+                } else {
+                    siteObject.ste_icon = '/images/fannst/main/search/site-icon.png';
                 }
                 var keywords = $('meta[name="keywords"]').attr('content');
                 if(keywords) {
@@ -237,8 +267,10 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
                 
                 // Gets the sub urls
+                clearTimeout(errorTimer);
                 cb(siteObject);
             }).catch(function(err) {
+                clearTimeout(errorTimer);
                 cb(false);
             })
         }
@@ -301,21 +333,30 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             } else {
                 // If request takes to long, it will switch to http
                 var timeout = setTimeout(function() {
-                    reqp('http://' + url).then(function(html) {
+                    console.log('correctUrl error timer off')
+                    reqp('http://' + url, {
+                        timeout: 2000
+                    }).then(function(html) {
                         cb('http://' + url);
                     }).catch(function(err) {
                         cb(false);
                     })
                 }, 5000)
                 // Checks for https
-                reqp('https://' + url).then(function(html) {
+                reqp('https://' + url, {
+                    timeout: 2000
+                }).then(function(html) {
                     clearTimeout(timeout);
                     cb('https://' + url);
                 }).catch(function(err) {
                     clearTimeout(timeout);
-                    reqp('http://' + url).then(function(html) {
+                    reqp('http://' + url, {
+                        timeout: 2000
+                    }).then(function(html) {
+                        clearTimeout(timeout);
                         cb('http://' + url);
                     }).catch(function(err) {
+                        clearTimeout(timeout);
                         cb(false);
                     })
                 })
@@ -341,7 +382,8 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                                 ste_author: siteObject.ste_author,
                                 ste_copyright: siteObject.ste_copyright,
                                 ste_keywords: siteObject.ste_keywords,
-                                site_viewport: siteObject.site_viewport
+                                site_viewport: siteObject.site_viewport,
+                                ste_icon: siteObject.ste_icon
                             }
                         }, function(err) {
                             if(err) {
@@ -376,7 +418,8 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
 
                     var errorTimer = setTimeout(function() {
                         cb(false);
-                    }, 3000)
+                    }, 60000)
+
                     urls.forEach(function(url) {
                         crawlSubPage(url).then(function(res) {
                             if(res) {
@@ -384,20 +427,36 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                                     if(result) {
                                         console.log(`Inserted: ${url}`);
                                     }
+
+                                    processed++;
+                                    if(processed >= urls.length) {
+                                        console.log(processed)
+                                        clearTimeout(errorTimer);
+                                        cb(true);
+                                    }
                                 })
                             } else {
                                 console.log(`Error: ${url}`);
-                            }
 
-                            processed++;
-                            if(processed >= urls.length) {
-                                clearTimeout(errorTimer);
-                                cb(true);
+                                processed++;
+                                if(processed >= urls.length) {
+                                    console.log(processed)
+                                    clearTimeout(errorTimer);
+                                    cb(true);
+                                }
                             }
                         }).catch(function(err) {
                             cb(false);
+
+                            processed++;
+                            if(processed >= urls.length) {
+                                console.log(processed)
+                                clearTimeout(errorTimer);
+                                cb(true);
+                            }
                         })
                     })
+
                 } else {
                     cb(false);
                 }
@@ -419,10 +478,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                                 crawlSite(site.url, function(cb) {
                                     if(cb) {
                                         console.log('done');
-                                        crawlQue()
-                                    } else {
-                                        crawlQue()
                                     }
+
+                                    crawlQue()
                                 })
                             }
                         })
@@ -430,7 +488,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                         console.log('Waiting for job');
                         setTimeout(function() {
                             crawlQue()
-                        }, 500)
+                        }, 1500)
                     }
                 }
             })
