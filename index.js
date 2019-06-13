@@ -1,20 +1,34 @@
 /*
-    The requires
+-- Google Like Web-Crawler
+    -- Made By: Skywalker04885
+-- Visit https://fannst.nl for example
+*/
+
+/*
+    -- The requires
 */
 
 // The HTTP Packages
+
 const reqp = require('request-promise');
 const urlParser = require('url');
 const MongoClient = require('mongodb').MongoClient;
 const f = require('util').format;
+
 // The Cheerio packages
+
 const cheerio = require('cheerio');
+
 // The FS Packages
+
 const fs = require('fs');
 
 // Gets config
+
 const config = JSON.parse(fs.readFileSync('./config/crawler.json'));
+
 // Configures the database
+
 if(config.MongoAuthentication) {
     var username = encodeURIComponent(config.MongoAuthCredentials.username);
     var password = encodeURIComponent(config.MongoAuthCredentials.password);
@@ -23,18 +37,27 @@ if(config.MongoAuthentication) {
 } else {
     var DataBase = 'mongodb://127.0.0.1:27017/?gssapiServiceName=mongodb';
 }
-// Connects to mongodb
+
+/*
+    --Connects mongodv
+*/
+
 MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
     if(err) {
         throw err;
     } else {
+        
+        // Defines the databases
+
         var mainDBO = db.db(config.DBname);
         var queDBO = db.db(config.QueDBname);
 
         /*
-            The functions
+            --The functions
         */
-        // The site crawl function
+
+        // CrawlPage function (Handles a crawling from a single main-page)
+
         function crawlPage(url) {
             return new Promise(function(cb) {
                 var errorTimer = setTimeout(function() {
@@ -69,6 +92,13 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             })
         }
+
+        /*
+            --The page data crawling
+        */
+
+        // Crawl sub page function (Handles the crawling of layer 2, sub page)
+
         function crawlSubPage(url) {
             return new Promise(function(cb) {
                 var errorTimer = setTimeout(function() {
@@ -100,7 +130,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             })
         }
-        // Grabs the data from the site
+        
+        // Get page data function (Gets the page data, and returns it)
+
         function getPageData(url, cb) {
             var errorTimer = setTimeout(function() {
                 cb(false);
@@ -191,7 +223,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 cb(false);
             })
         }
-        // Grabs the data from the site
+
+        // getSubPageData function (Gets the data from a sub-page and returns it)
+
         function getSubPageData(url, cb) {
             var errorTimer = setTimeout(function() {
                 cb(false);
@@ -278,7 +312,13 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 cb(false);
             })
         }
-        // Fetches the images
+        
+        /*
+            --The data image/url collection functions
+        */
+
+        // Fetch images function (Gets the images and returns the: type, name and url)
+
         function fetchImages(imagesToParse, originalUrl, cb) {
             var processed = 0;
             var images = [];
@@ -332,7 +372,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             }
         }
-        // Fetches the urls
+
+        // FetchUrls function (Gets the urls)
+        
         function fetchUrls(urlsToParse, originalUrl, cb) {
             var processed = 0;
             var urls = [];
@@ -367,14 +409,16 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             }
         }
-        // The adjust url function to make url correct
+
         /* 
+            --Corrects the url before crawl
 
             The URL Format (Without dir): (https://)(http://)example.com
 
             The URL Format (With dir): (https://)(http://)example.com/test
 
         */
+
         function correctUrl(url, cb) {
             // Gets the url
             var url = url;
@@ -420,9 +464,13 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 })
             }
         }
+
         /* 
-            Insert into database
+            --Insert into database
         */
+
+        // Inserts pages
+
         function insertPage(siteObject, cb) {
             if(siteObject) {
                 mainDBO.collection('indexed').findOne({
@@ -464,7 +512,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 cb(false);
             }
         }
-        // Insert image
+
+        // Inserts images
+
         function insertImage(imageObject, cb) {
             dbo.collection('images').findOne({
                 img_url: imageObject.image_url
@@ -500,9 +550,11 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             })
         }
+
         /* 
             Crawl full site
         */
+
         function crawlSite(url, cb) {
             // Indexes the main page
             crawlPage(url).then(function(result) {
@@ -559,9 +611,11 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 }
             })
         }
+        
         /*
             The script
         */
+
         function crawlQue() {
             queDBO.collection('que').findOne(function(err, site) {
                 if(err) {
