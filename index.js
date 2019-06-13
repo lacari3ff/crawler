@@ -44,12 +44,13 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 if(url) {
                     correctUrl(url, function(res) {
                         if(res) {
-                            getPageData(res, function(siteObject, urls) {
+                            getPageData(res, function(siteObject, urls, images) {
                                 if(siteObject) {
                                     clearTimeout(errorTimer);
                                     cb({
                                         siteObject: siteObject,
-                                        urls: urls
+                                        urls: urls,
+                                        images: images
                                     })
                                 } else {
                                     clearTimeout(errorTimer);
@@ -180,7 +181,6 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 console.log('as')
                 fetchUrls(urlsToParse, url, function(result) {
                     fetchImages(imagesToParse, url, function(images) {
-                        console.log(images);
                         // Sets the callback
                         clearTimeout(errorTimer);
                         cb(siteObject, result, images);
@@ -269,7 +269,6 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 var imagesToParse = $('img');
 
                 fetchImages(imagesToParse, url, function(images) {
-                    console.log(images);
                     // Sets the callback
                     clearTimeout(errorTimer);
                     cb(siteObject, images);
@@ -283,6 +282,7 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         function fetchImages(imagesToParse, originalUrl, cb) {
             var processed = 0;
             var images = [];
+            var imageObjects = []
 
             for(var i = 0; i < imagesToParse.length; i++) {
                 // Sets the current image
@@ -291,24 +291,44 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 if(images.indexOf(image) === -1 && images.indexOf('/' + image) === -1) {
                     // Checks the image type
                     if(image.substring(0, 8) === 'https://') {
-                        images.push(image);
+                        image = image;
                     } else if(image.substring(0, 7) === 'http://') {
-                        images.push(image);
+                        image = image;
                     } else {
                         if(image.substring(0, 1) === '/') {
                             if(image.substring(0, 2) == '//') {
-                                images.push(image.substring(1, image.length));
+                                image = image.substring(1, image.length);
                             } else {
-                                images.push(originalUrl + image);
+                                image = originalUrl + image;
                             }
                         }
                     }
                 }
+                // Gets the raw url
+                if(image.includes('&')) {
+                    var img_index = image.indexOf('&');
+                    var img = image.substring(0, img_index);
+                } else {
+                    img = image;
+                }
+                // Gets the image type
+                var img_type_index = img.lastIndexOf('.');
+                var img_type = img.substring(img_type_index,  img.length);
+                // Gets the image data
+                var img_name_index = image.lastIndexOf('/') + 1;
+                var img_name = image.substring(img_name_index, img_type_index);
+                // Inserts it into the arrays
+                images.push(image);
+                imageObjects.push({
+                    img_name: img_name,
+                    img_url: img,
+                    img_type: img_type
+                })
                 // Says one more is processed
                 processed++;
                 // Checks if process is done
                 if(processed >= imagesToParse.length) {
-                    cb(images);
+                    cb(imageObjects);
                 }
             }
         }
@@ -444,6 +464,22 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                 cb(false);
             }
         }
+        // Insert image
+        function insertImage(imageObject, cb) {
+            dbo.collection('images').findOne({
+                img_url: imageObject.image_url
+            }, function(err, res) {
+                if(err) {
+                    cb(false);
+                } else if(res) {
+                    mainDBO.collection('images').updateOne({
+                        img_url: imageObject.image_url
+                    }, {$set: {
+                        img_
+                    }})
+                }
+            })
+        }
         /* 
             Crawl full site
         */
@@ -452,6 +488,9 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             crawlPage(url).then(function(result) {
                 if(result) {
                     var urls = result.urls;
+                    var images = result.images;
+
+                    console.log(images);
                     var processed = 0;
 
                     var errorTimer = setTimeout(function() {
