@@ -516,14 +516,14 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
         // Inserts images
 
         function insertImage(imageObject, cb) {
-            dbo.collection('images').findOne({
-                img_url: imageObject.image_url
+            mainDBO.collection('images').findOne({
+                img_url: imageObject.img_url
             }, function(err, res) {
                 if(err) {
                     cb(false);
                 } else if(res) {
                     mainDBO.collection('images').updateOne({
-                        img_url: imageObject.image_url
+                        img_url: imageObject.img_url
                     }, {$set: {
                         img_name: imageObject.img_name,
                         img_type: imageObject.img_type,
@@ -555,57 +555,88 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
             Crawl full site
         */
 
+        // The crawl site crawl images
+
+        function crawlSiteImages(images, cb) {
+            // Sets the values
+            var processed = 0;
+            // Does the foreach
+            images.forEach(function(image) {
+                insertImage(image, function(result) {
+                    if(result) {
+                        console.log(`Inserted: ${image.img_name}`);
+                        // Adds the processed
+                        processed++;
+                        if(processed >= images.length) {
+                            cb(true);
+                        }
+                    } else {
+                        console.log(`Error: ${image.img_name}`);
+                        // Adds the processed
+                        processed++;
+                        if(processed >= images.length) {
+                            cb(true);
+                        }
+                    }
+                })
+            })
+        }
+
+        function crawlSiteUrls(urls, cb) {
+            // Sets the values
+            var processed = 0;
+            // Does the foreach
+            urls.forEach(function(url) {
+                crawlSubPage(url).then(function(res) {
+                    if(res) {
+                        insertPage(res.siteObject, function(result) {
+                            if(result) {
+                                console.log(`Inserted: ${url}`);
+                            }
+                            // Adds the processed
+                            processed++;
+                            if(processed >= urls.length) {
+                                cb(true);
+                            }
+                        })
+                    } else {
+                        console.log(`Error: ${url}`);
+                        // Adds the processed
+                        processed++;
+                        if(processed >= urls.length) {
+                            cb(true);
+                        }
+                    }
+                }).catch(function(err) {
+                    // Adds the processed
+                    processed++;
+                    if(processed >= urls.length) {
+                        cb(true);
+                    }
+                })
+            })
+        }
+
         function crawlSite(url, cb) {
             // Indexes the main page
             crawlPage(url).then(function(result) {
                 if(result) {
                     var urls = result.urls;
                     var images = result.images;
-
-                    console.log(images);
-                    var processed = 0;
-
-                    var errorTimer = setTimeout(function() {
-                        cb(false);
-                    }, 60000)
-
-                    urls.forEach(function(url) {
-                        crawlSubPage(url).then(function(res) {
-                            if(res) {
-                                insertPage(res.siteObject, function(result) {
-                                    if(result) {
-                                        console.log(`Inserted: ${url}`);
-                                    }
-
-                                    processed++;
-                                    if(processed >= urls.length) {
-                                        console.log(processed)
-                                        clearTimeout(errorTimer);
-                                        cb(true);
-                                    }
-                                })
-                            } else {
-                                console.log(`Error: ${url}`);
-
-                                processed++;
-                                if(processed >= urls.length) {
-                                    console.log(processed)
-                                    clearTimeout(errorTimer);
+                    // Does the crawling
+                    crawlSiteUrls(urls, function(result) {
+                        if(result) {
+                            crawlSiteImages(images, function(result) {
+                                if(result) {
                                     cb(true);
+                                } else {
+                                    cb(false);
                                 }
-                            }
-                        }).catch(function(err) {
+                            })
+                        } else {
                             cb(false);
-
-                            processed++;
-                            if(processed >= urls.length) {
-                                console.log(processed)
-                                clearTimeout(errorTimer);
-                                cb(true);
-                            }
-                        })
+                        }
                     })
-
                 } else {
                     cb(false);
                 }

@@ -2,7 +2,7 @@
     "DBname": "fannstdb-search",
     "QueDBname": "fannstdb-search",
     "MongoAuthenticationIp": "192.168.178.15",
-    "MongoAuthentication": false,
+    "MongoAuthentication": true,
     "MongoAuthCredentials": {
         "username": "admin",
         "password": "Ffeirluke234"
