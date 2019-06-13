@@ -475,8 +475,28 @@ MongoClient.connect(DataBase, {useNewUrlParser: true}, function(err, db) {
                     mainDBO.collection('images').updateOne({
                         img_url: imageObject.image_url
                     }, {$set: {
-                        img_
-                    }})
+                        img_name: imageObject.img_name,
+                        img_type: imageObject.img_type,
+                        img_url: imageObject.img_url
+                    }}, function(err) {
+                        if(err) {
+                            cb(false);
+                        } else {
+                            cb(true);
+                        }
+                    })
+                } else {
+                    mainDBO.collection('images').insertOne({
+                        img_name: imageObject.img_name,
+                        img_type: imageObject.img_type,
+                        img_url: imageObject.img_url
+                    }, function(err) {
+                        if(err) {
+                            cb(false);
+                        } else {
+                            cb(true);
+                        }
+                    })
                 }
             })
         }
